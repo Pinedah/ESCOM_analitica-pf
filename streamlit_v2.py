@@ -613,7 +613,6 @@ with col2:
             fig_mds3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_mds3, use_container_width=True)
             
-            st.caption(f"**Stress MDS:** {mds.stress_:.3f} (valores <0.1 indican excelente ajuste)")
     except Exception as e:
         st.error("No se pudo realizar el análisis MDS. Verifica que los datos filtrados sean suficientes.")
 
