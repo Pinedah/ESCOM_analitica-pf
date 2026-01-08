@@ -44,16 +44,16 @@ year_range = st.sidebar.slider(
     (int(df['year'].min()), int(df['year'].max()))
 )
 
-makes = ['Todos'] + sorted(df['make'].unique().tolist())
+makes = ['Todos'] + sorted(df['make'].dropna().unique().tolist())
 selected_make = st.sidebar.selectbox("Marca", makes)
 
-bodies = ['Todos'] + sorted(df['body'].unique().tolist())
+bodies = ['Todos'] + sorted(df['body'].dropna().unique().tolist())
 selected_body = st.sidebar.selectbox("Tipo de carrocería", bodies)
 
-transmissions = ['Todos'] + sorted(df['transmission'].unique().tolist())
+transmissions = ['Todos'] + sorted(df['transmission'].dropna().unique().tolist())
 selected_transmission = st.sidebar.selectbox("Transmisión", transmissions)
 
-states = ['Todos'] + sorted(df['state'].unique().tolist())
+states = ['Todos'] + sorted(df['state'].dropna().unique().tolist())
 selected_state = st.sidebar.selectbox("Estado", states)
 
 price_range = st.sidebar.slider(
