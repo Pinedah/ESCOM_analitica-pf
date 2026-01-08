@@ -315,6 +315,12 @@ with col3:
     st.markdown("#### 7. Evolución del Precio en el Tiempo")
     st.caption("**¿Por qué?** Muestra cómo el precio promedio ha cambiado mes a mes, revelando tendencias y ciclos.")
     
+    # Mostrar rango de años de vehículos filtrados
+    if len(filtered_df) > 0:
+        year_min = int(filtered_df['year'].min())
+        year_max = int(filtered_df['year'].max())
+        st.caption(f"*Mostrando evolución de precios de venta para vehículos del año {year_min} al {year_max}*")
+    
     try:
         monthly_avg = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
             'sellingprice': 'mean',
@@ -337,7 +343,7 @@ with col3:
                                           line=dict(color='red', width=2, dash='dash')))
             
             fig7.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                              xaxis_title='Fecha', yaxis_title='Precio ($)',
+                              xaxis_title='Fecha de Venta', yaxis_title='Precio ($)',
                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig7, use_container_width=True)
         else:
@@ -395,7 +401,7 @@ with col3:
                                       line=dict(color='orange', width=2, dash='dot')))
             
             fig9.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                              xaxis_title='Fecha', yaxis_title='Precio ($)',
+                              xaxis_title='Fecha de Venta', yaxis_title='Precio ($)',
                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig9, use_container_width=True)
         else:
