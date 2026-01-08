@@ -159,6 +159,7 @@ with col1:
     
     # Gráfico 1: Precio vs Kilometraje
     st.markdown("#### 1. Impacto del Kilometraje en Precio")
+    st.caption("**¿Por qué?** El kilometraje es el indicador más directo del desgaste. A mayor uso, menor precio de venta.")
     
     try:
         # Crear bins para mejor visualización
@@ -181,6 +182,7 @@ with col1:
     
     # Gráfico 2: Depreciación por Edad
     st.markdown("#### 2. Depreciación por Edad")
+    st.caption("**¿Por qué?** Muestra la caída del precio promedio conforme aumenta la edad del vehículo (depreciación).")
     
     try:
         age_price = filtered_df.groupby('vehicle_age').agg({
@@ -204,6 +206,7 @@ with col1:
     
     # Gráfico 3: Precio según Condición
     st.markdown("#### 3. Precio según Condición")
+    st.caption("**¿Por qué?** La condición refleja el estado físico. A mejor condición, mayor precio de venta alcanzado.")
     
     try:
         # Crear bins de condición
@@ -233,6 +236,7 @@ with col2:
     
     # Gráfico 4: Top Marcas por Precio
     st.markdown("#### 4. Precio Promedio por Marca")
+    st.caption("**¿Por qué?** La marca es clave en el precio. Marcas premium obtienen precios más altos.")
     
     try:
         top_makes = filtered_df['make'].value_counts().head(10).index
@@ -256,6 +260,7 @@ with col2:
     
     # Gráfico 5: Precio por Tipo de Carrocería
     st.markdown("#### 5. Precio por Tipo de Vehículo")
+    st.caption("**¿Por qué?** El tipo de carrocería determina el segmento y afecta directamente el precio de venta.")
     
     try:
         body_price = filtered_df.groupby('body').agg({
@@ -279,6 +284,7 @@ with col2:
     
     # Gráfico 6: Precio por Estado
     st.markdown("#### 6. Precio por Ubicación Geográfica")
+    st.caption("**¿Por qué?** Los precios varían según el estado por diferencias en demanda, clima e ingresos locales.")
     
     try:
         state_price = filtered_df.groupby('state').agg({
@@ -307,11 +313,13 @@ with col3:
     
     # Gráfico 7: Evolución Temporal del Precio
     st.markdown("#### 7. Evolución del Precio en el Tiempo")
+    st.caption("**¿Por qué?** Muestra cómo el precio promedio ha cambiado mes a mes, revelando tendencias y ciclos.")
     
     # Mostrar rango de años de vehículos filtrados
     if len(filtered_df) > 0:
         year_min = int(filtered_df['year'].min())
         year_max = int(filtered_df['year'].max())
+        st.caption(f"*Mostrando evolución de precios de venta para vehículos del año {year_min} al {year_max}*")
     
     try:
         monthly_avg = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
@@ -345,6 +353,7 @@ with col3:
     
     # Gráfico 8: Precio por Transmisión
     st.markdown("#### 8. Precio por Transmisión")
+    st.caption("**¿Por qué?** El tipo de transmisión (automática vs manual) influye en el precio por preferencias del mercado y tecnología.")
     
     try:
         trans_price = filtered_df.groupby('transmission').agg({
@@ -367,6 +376,7 @@ with col3:
     
     # Gráfico 9: Precio Real vs Valor de Referencia
     st.markdown("#### 9. Precio Real vs Valor MMR")
+    st.caption("**¿Por qué?** Compara el precio de venta real contra el valor de mercado (MMR). Identifica si se vende arriba o abajo del valor esperado.")
     
     try:
         # Calcular diferencia porcentual
@@ -402,6 +412,7 @@ with col3:
 # ====== SECCIÓN FINAL: MATRIZ DE CORRELACIÓN ======
 st.markdown("---")
 st.markdown("### **Matriz de Correlación: Relaciones entre Factores de Precio**")
+st.caption("**¿Por qué?** Esta matriz identifica qué variables están más fuertemente relacionadas con el precio, confirmando los factores más influyentes.")
 
 col1, col2, col3 = st.columns([2, 1, 2])
 
@@ -476,12 +487,15 @@ with col3:
 # ====== SECCIÓN DE ANÁLISIS AVANZADOS ======
 st.markdown("---")
 st.markdown("### **Análisis Avanzados: Técnicas Multivariadas**")
+st.caption("**Objetivo:** Aplicar técnicas estadísticas avanzadas para entender mejor las relaciones entre variables y el precio.")
 
 col1, col2, col3 = st.columns(3)
 
 # ========== COLUMNA 1: PCA ==========
 with col1:
     st.markdown("#### **Análisis de Componentes Principales (PCA)**")
+    st.caption("**¿Qué es?** PCA reduce la dimensionalidad identificando las direcciones de máxima varianza en los datos.")
+    st.caption("**¿Por qué?** Permite identificar qué combinaciones de variables explican mejor la variabilidad del precio.")
     
     try:
         # Preparar datos para PCA
@@ -512,8 +526,11 @@ with col1:
             fig_pca1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
             st.plotly_chart(fig_pca1, use_container_width=True)
             
+            st.caption(f"Los primeros 2 componentes explican **{(pca.explained_variance_ratio_[:2].sum()*100):.1f}%** de la varianza total.")
+            
             # Gráfico 2: Loadings (Contribuciones)
             st.markdown("**2. Contribución de Variables**")
+            st.caption("Muestra qué variables influyen más en cada componente principal.")
             
             loadings_df = pd.DataFrame(
                 pca.components_[:3].T,
@@ -535,8 +552,11 @@ with col1:
             fig_pca2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_pca2, use_container_width=True)
             
+            st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte influencia en el componente.")
+            
             # Gráfico 3: Proyección 2D
             st.markdown("**3. Proyección en 2D (PC1 vs PC2)**")
+            st.caption("Visualiza cómo se distribuyen los vehículos según los componentes principales, coloreado por precio.")
             
             sample_size = min(500, len(pca_result))
             indices = np.random.choice(len(pca_result), sample_size, replace=False)
@@ -558,6 +578,8 @@ with col1:
 # ========== COLUMNA 2: MDS ==========
 with col2:
     st.markdown("#### **Escalamiento Multidimensional (MDS)**")
+    st.caption("**¿Qué es?** MDS proyecta datos en menor dimensión preservando las distancias entre observaciones.")
+    st.caption("**¿Por qué?** Revela patrones de similitud entre vehículos basados en precio y características.")
     
     try:
         # Preparar datos para MDS
@@ -580,6 +602,7 @@ with col2:
             
             # Gráfico 1: MDS coloreado por precio
             st.markdown("**1. Proyección MDS por Precio**")
+            st.caption("Vehículos similares en precio y características aparecen cercanos.")
             
             mds_plot_df = pd.DataFrame({
                 'MDS1': mds_result[:, 0],
@@ -597,6 +620,7 @@ with col2:
             
             # Gráfico 2: MDS coloreado por kilometraje
             st.markdown("**2. Proyección MDS por Kilometraje**")
+            st.caption("Identifica si el kilometraje genera clusters distintos de vehículos.")
             
             fig_mds2 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Kilometraje',
                                  color_continuous_scale='YlOrRd',
@@ -606,6 +630,7 @@ with col2:
             
             # Gráfico 3: MDS coloreado por año
             st.markdown("**3. Proyección MDS por Año**")
+            st.caption("Muestra cómo vehículos de diferentes años se agrupan en el espacio MDS.")
             
             fig_mds3 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Año',
                                  color_continuous_scale='Teal',
@@ -620,9 +645,12 @@ with col2:
 # ========== COLUMNA 3: CORRELACIÓN PARCIAL DE PEARSON ==========
 with col3:
     st.markdown("#### **Correlación Parcial de Pearson**")
+    st.caption("**¿Qué es?** Mide la correlación entre dos variables controlando el efecto de otras variables.")
+    st.caption("**¿Por qué?** Identifica relaciones directas con el precio, eliminando efectos confusores.")
     
     try:
         st.markdown("**1. Correlación Parcial con Precio**")
+        st.caption("Correlación de cada variable con el precio, controlando por las demás variables.")
         
         # Calcular correlaciones parciales
         def partial_corr(df, x, y, control_vars):
@@ -683,8 +711,11 @@ with col3:
             fig_partial1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_partial1, use_container_width=True)
             
+            st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte relación directa con el precio.")
+            
             # Gráfico 2: Comparación correlación simple vs parcial
             st.markdown("**2. Comparación: Simple vs Parcial**")
+            st.caption("Diferencia entre correlación simple y parcial revela efectos indirectos.")
             
             simple_corr = []
             for var in vars_to_analyze:
@@ -725,6 +756,7 @@ with col3:
                 
                 # Tabla resumen
                 st.markdown("**3. Tabla de Resultados**")
+                st.caption("Resumen de correlaciones simples y parciales con el precio.")
                 
                 comparison_styled = comparison_df.copy()
                 comparison_styled['Simple'] = comparison_styled['Simple'].apply(lambda x: f"{x:.3f}")
@@ -736,3 +768,21 @@ with col3:
                 st.caption("**Nota:** Gran diferencia entre simple y parcial indica efectos indirectos (mediados por otras variables).")
     except Exception as e:
         st.error("No se pudo realizar el análisis de correlación parcial. Verifica que los datos filtrados sean suficientes.")
+st.markdown("""
+### **Conclusiones sobre Factores que Influyen en el Precio:**
+
+1. **Factor más determinante:** El valor MMR (Manheim Market Report) muestra la correlación más alta, validando que el mercado sigue referencias establecidas.
+
+2. **Depreciación:** La edad del vehículo y el kilometraje son factores negativos claros - a mayor edad/uso, menor precio.
+
+3. **Marca y tipo:** Ciertos fabricantes y tipos de carrocería (SUV, Sedan) mantienen mejor su valor.
+
+4. **Evolución temporal:** Los precios muestran tendencias y estacionalidad, indicando momentos óptimos de compra/venta.
+
+5. **Condición física:** El estado del vehículo impacta significativamente, siendo un factor controlable por el vendedor.
+""")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Dashboard Optimizado")
+st.sidebar.markdown("*Análisis completo en una página*")
+st.sidebar.markdown("**Creado con Streamlit**")
