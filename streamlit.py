@@ -19,7 +19,7 @@ st.title("Dashboard de Análisis de Precios de Autos")
 # Cargar datos
 @st.cache_data
 def load_data():
-    df = pd.read_csv('../proyecto/datasets/car_prices_clean.csv')
+    df = pd.read_csv('car_prices_clean.csv')
     # Convertir saledate a datetime con manejo de errores y UTC
     df['saledate'] = pd.to_datetime(df['saledate'], errors='coerce', utc=True)
     
