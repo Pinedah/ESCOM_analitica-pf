@@ -86,9 +86,47 @@ if selected_transmission != 'Todos':
 if selected_state != 'Todos':
     filtered_df = filtered_df[filtered_df['state'] == selected_state]
 
+# ====== VALIDACIÓN DE DATOS FILTRADOS ======
+if len(filtered_df) == 0:
+    st.sidebar.error(f"Registros filtrados: 0")
+    st.sidebar.markdown("---")
+    st.error("### No hay datos disponibles con los filtros seleccionados")
+    st.warning("""
+    **No se encontraron vehículos que cumplan con todos los criterios de filtrado seleccionados.**
+    
+    Por favor, ajusta los filtros para obtener resultados:
+    - Amplía los rangos de precio o kilometraje
+    - Selecciona 'Todos' en algunas categorías (Marca, Tipo de carrocería, Transmisión, Estado)
+    - Verifica que la combinación de filtros sea realista (ej: algunas marcas no tienen ciertos tipos de carrocería)
+    """)
+    st.stop()
+
+if len(filtered_df) < 10:
+    st.sidebar.warning(f"Registros filtrados: {len(filtered_df):,}")
+    st.sidebar.markdown("---")
+    st.warning(f"""
+    ### Advertencia: Pocos datos disponibles ({len(filtered_df)} registros)
+    
+    Los análisis pueden no ser representativos con tan pocos datos. Se recomienda:
+    - Ampliar los criterios de filtrado
+    - Seleccionar 'Todos' en más categorías
+    """)
+    # Continuar pero con advertencia
+else:
+    st.sidebar.info(f"Registros filtrados: {len(filtered_df):,}")
+
 filtered_df_clean = filtered_df.dropna().copy()
 
-st.sidebar.info(f"Registros filtrados: {len(filtered_df):,}")
+# Validar datos limpios
+if len(filtered_df_clean) < 5:
+    st.error("""
+    ### Datos insuficientes después de limpiar valores faltantes
+    
+    No hay suficientes registros completos para realizar los análisis.
+    Por favor, ajusta los filtros para obtener más datos.
+    """)
+    st.stop()
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Pregunta Principal:**")
 st.sidebar.markdown("*¿Qué factores influyen en el precio de venta y cómo evolucionan en el tiempo?*")
@@ -123,58 +161,73 @@ with col1:
     st.markdown("#### 1. Impacto del Kilometraje en Precio")
     st.caption("**¿Por qué?** El kilometraje es el indicador más directo del desgaste. A mayor uso, menor precio de venta.")
     
-    # Crear bins para mejor visualización
-    filtered_df['odometer_bin'] = pd.cut(filtered_df['odometer'], bins=10)
-    price_by_km = filtered_df.groupby('odometer_bin')['sellingprice'].mean().reset_index()
-    price_by_km['odometer_mid'] = price_by_km['odometer_bin'].apply(lambda x: x.mid)
-    
-    fig1 = px.scatter(filtered_df.sample(min(500, len(filtered_df))), 
-                      x='odometer', y='sellingprice',
-                      opacity=0.4, color='sellingprice',
-                      color_continuous_scale='RdYlGn',
-                      labels={'odometer': 'Kilometraje', 'sellingprice': 'Precio ($)'})
-    fig1.add_scatter(x=price_by_km['odometer_mid'], y=price_by_km['sellingprice'],
-                     mode='lines', name='Precio Promedio', line=dict(color='red', width=3))
-    fig1.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig1, use_container_width=True)
+    try:
+        # Crear bins para mejor visualización
+        filtered_df['odometer_bin'] = pd.cut(filtered_df['odometer'], bins=10)
+        price_by_km = filtered_df.groupby('odometer_bin')['sellingprice'].mean().reset_index()
+        price_by_km['odometer_mid'] = price_by_km['odometer_bin'].apply(lambda x: x.mid)
+        
+        fig1 = px.scatter(filtered_df.sample(min(500, len(filtered_df))), 
+                          x='odometer', y='sellingprice',
+                          opacity=0.4, color='sellingprice',
+                          color_continuous_scale='RdYlGn',
+                          labels={'odometer': 'Kilometraje', 'sellingprice': 'Precio ($)'})
+        fig1.add_scatter(x=price_by_km['odometer_mid'], y=price_by_km['sellingprice'],
+                         mode='lines', name='Precio Promedio', line=dict(color='red', width=3))
+        fig1.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                          showlegend=False)
+        st.plotly_chart(fig1, use_container_width=True)
+    except Exception as e:
+        st.info("No hay suficiente variabilidad en los datos para mostrar este gráfico.")
     
     # Gráfico 2: Depreciación por Edad
     st.markdown("#### 2. Depreciación por Edad")
     st.caption("**¿Por qué?** Muestra la caída del precio promedio conforme aumenta la edad del vehículo (depreciación).")
     
-    age_price = filtered_df.groupby('vehicle_age').agg({
-        'sellingprice': ['mean', 'count']
-    }).reset_index()
-    age_price.columns = ['vehicle_age', 'avg_price', 'count']
-    age_price = age_price[age_price['count'] >= 10]  # Filtrar grupos pequeños
-    
-    fig2 = px.line(age_price, x='vehicle_age', y='avg_price',
-                   labels={'vehicle_age': 'Edad (años)', 'avg_price': 'Precio Promedio ($)'},
-                   markers=True)
-    fig2.update_traces(line_color='#1f77b4', line_width=3, marker=dict(size=8))
-    fig2.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig2, use_container_width=True)
+    try:
+        age_price = filtered_df.groupby('vehicle_age').agg({
+            'sellingprice': ['mean', 'count']
+        }).reset_index()
+        age_price.columns = ['vehicle_age', 'avg_price', 'count']
+        age_price = age_price[age_price['count'] >= 10]  # Filtrar grupos pequeños
+        
+        if len(age_price) > 0:
+            fig2 = px.line(age_price, x='vehicle_age', y='avg_price',
+                           labels={'vehicle_age': 'Edad (años)', 'avg_price': 'Precio Promedio ($)'},
+                           markers=True)
+            fig2.update_traces(line_color='#1f77b4', line_width=3, marker=dict(size=8))
+            fig2.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos agrupados por edad para mostrar este gráfico.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de depreciación por edad.")
     
     # Gráfico 3: Precio según Condición
     st.markdown("#### 3. Precio según Condición")
     st.caption("**¿Por qué?** La condición refleja el estado físico. A mejor condición, mayor precio de venta alcanzado.")
     
-    # Crear bins de condición
-    filtered_df['condition_category'] = pd.cut(filtered_df['condition'], 
-                                               bins=[0, 20, 30, 40, 50],
-                                               labels=['Malo', 'Regular', 'Bueno', 'Excelente'])
-    condition_price = filtered_df.groupby('condition_category')['sellingprice'].mean().reset_index()
-    
-    fig3 = px.bar(condition_price, x='condition_category', y='sellingprice',
-                  labels={'condition_category': 'Condición', 'sellingprice': 'Precio Promedio ($)'},
-                  color='sellingprice', color_continuous_scale='Greens',
-                  text='sellingprice')
-    fig3.update_traces(texttemplate='$%{text:.0f}', textposition='outside')
-    fig3.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig3, use_container_width=True)
+    try:
+        # Crear bins de condición
+        filtered_df['condition_category'] = pd.cut(filtered_df['condition'], 
+                                                   bins=[0, 20, 30, 40, 50],
+                                                   labels=['Malo', 'Regular', 'Bueno', 'Excelente'])
+        condition_price = filtered_df.groupby('condition_category')['sellingprice'].mean().reset_index()
+        
+        if len(condition_price) > 0:
+            fig3 = px.bar(condition_price, x='condition_category', y='sellingprice',
+                          labels={'condition_category': 'Condición', 'sellingprice': 'Precio Promedio ($)'},
+                          color='sellingprice', color_continuous_scale='Greens',
+                          text='sellingprice')
+            fig3.update_traces(texttemplate='$%{text:.0f}', textposition='outside')
+            fig3.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=20),
+                              showlegend=False)
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.info("No hay datos para mostrar en este gráfico.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de precio por condición.")
 
 # ========== COLUMNA 2: FACTORES DE MERCADO Y MARCA ==========
 with col2:
@@ -185,55 +238,73 @@ with col2:
     st.markdown("#### 4. Precio Promedio por Marca")
     st.caption("**¿Por qué?** La marca es clave en el precio. Marcas premium obtienen precios más altos.")
     
-    top_makes = filtered_df['make'].value_counts().head(10).index
-    make_price = filtered_df[filtered_df['make'].isin(top_makes)].groupby('make').agg({
-        'sellingprice': 'mean'
-    }).reset_index()
-    make_price.columns = ['make', 'avg_price']
-    make_price = make_price.sort_values('avg_price', ascending=True)
-    
-    fig4 = px.bar(make_price, y='make', x='avg_price', orientation='h',
-                  labels={'make': 'Marca', 'avg_price': 'Precio Promedio ($)'},
-                  color='avg_price', color_continuous_scale='Viridis')
-    fig4.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig4, use_container_width=True)
+    try:
+        top_makes = filtered_df['make'].value_counts().head(10).index
+        if len(top_makes) > 0:
+            make_price = filtered_df[filtered_df['make'].isin(top_makes)].groupby('make').agg({
+                'sellingprice': 'mean'
+            }).reset_index()
+            make_price.columns = ['make', 'avg_price']
+            make_price = make_price.sort_values('avg_price', ascending=True)
+            
+            fig4 = px.bar(make_price, y='make', x='avg_price', orientation='h',
+                          labels={'make': 'Marca', 'avg_price': 'Precio Promedio ($)'},
+                          color='avg_price', color_continuous_scale='Viridis')
+            fig4.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              showlegend=False)
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("No hay suficientes marcas para mostrar.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de precio por marca.")
     
     # Gráfico 5: Precio por Tipo de Carrocería
     st.markdown("#### 5. Precio por Tipo de Vehículo")
     st.caption("**¿Por qué?** El tipo de carrocería determina el segmento y afecta directamente el precio de venta.")
     
-    body_price = filtered_df.groupby('body').agg({
-        'sellingprice': ['mean', 'count']
-    }).reset_index()
-    body_price.columns = ['body', 'avg_price', 'count']
-    body_price = body_price[body_price['count'] >= 20]
-    body_price = body_price.sort_values('avg_price', ascending=False)
-    
-    fig5 = px.bar(body_price, x='body', y='avg_price',
-                  labels={'body': 'Tipo', 'avg_price': 'Precio Promedio ($)'},
-                  color='avg_price', color_continuous_scale='Plasma')
-    fig5.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig5, use_container_width=True)
+    try:
+        body_price = filtered_df.groupby('body').agg({
+            'sellingprice': ['mean', 'count']
+        }).reset_index()
+        body_price.columns = ['body', 'avg_price', 'count']
+        body_price = body_price[body_price['count'] >= 5]  # Reducir umbral
+        body_price = body_price.sort_values('avg_price', ascending=False)
+        
+        if len(body_price) > 0:
+            fig5 = px.bar(body_price, x='body', y='avg_price',
+                          labels={'body': 'Tipo', 'avg_price': 'Precio Promedio ($)'},
+                          color='avg_price', color_continuous_scale='Plasma')
+            fig5.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              showlegend=False)
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos por tipo de carrocería.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de precio por tipo de vehículo.")
     
     # Gráfico 6: Precio por Estado
     st.markdown("#### 6. Precio por Ubicación Geográfica")
     st.caption("**¿Por qué?** Los precios varían según el estado por diferencias en demanda, clima e ingresos locales.")
     
-    state_price = filtered_df.groupby('state').agg({
-        'sellingprice': ['mean', 'count']
-    }).reset_index()
-    state_price.columns = ['state', 'avg_price', 'count']
-    state_price = state_price[state_price['count'] >= 50]
-    state_price = state_price.sort_values('avg_price', ascending=False).head(15)
-    
-    fig6 = px.bar(state_price, x='state', y='avg_price',
-                  labels={'state': 'Estado', 'avg_price': 'Precio Promedio ($)'},
-                  color='avg_price', color_continuous_scale='Reds')
-    fig6.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False, xaxis={'tickangle': -45})
-    st.plotly_chart(fig6, use_container_width=True)
+    try:
+        state_price = filtered_df.groupby('state').agg({
+            'sellingprice': ['mean', 'count']
+        }).reset_index()
+        state_price.columns = ['state', 'avg_price', 'count']
+        state_price = state_price[state_price['count'] >= 5]  # Reducir umbral
+        state_price = state_price.sort_values('avg_price', ascending=False).head(15)
+        
+        if len(state_price) > 0:
+            fig6 = px.bar(state_price, x='state', y='avg_price',
+                          labels={'state': 'Estado', 'avg_price': 'Precio Promedio ($)'},
+                          color='avg_price', color_continuous_scale='Reds')
+            fig6.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              showlegend=False, xaxis={'tickangle': -45})
+            st.plotly_chart(fig6, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos por estado.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de precio por ubicación.")
 
 # ========== COLUMNA 3: EVOLUCIÓN TEMPORAL ==========
 with col3:
@@ -244,74 +315,93 @@ with col3:
     st.markdown("#### 7. Evolución del Precio en el Tiempo")
     st.caption("**¿Por qué?** Muestra cómo el precio promedio ha cambiado mes a mes, revelando tendencias y ciclos.")
     
-    monthly_avg = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
-        'sellingprice': 'mean',
-        'odometer': 'mean'
-    }).reset_index()
-    monthly_avg['saledate'] = monthly_avg['saledate'].dt.to_timestamp()
-    
-    fig7 = go.Figure()
-    fig7.add_trace(go.Scatter(x=monthly_avg['saledate'], y=monthly_avg['sellingprice'],
-                              mode='lines+markers', name='Precio',
-                              line=dict(color='blue', width=2),
-                              fill='tozeroy', fillcolor='rgba(0,100,255,0.2)'))
-    
-    # Media móvil
-    monthly_avg['rolling_avg'] = monthly_avg['sellingprice'].rolling(window=3).mean()
-    fig7.add_trace(go.Scatter(x=monthly_avg['saledate'], y=monthly_avg['rolling_avg'],
-                              mode='lines', name='Tendencia (3 meses)',
-                              line=dict(color='red', width=2, dash='dash')))
-    
-    fig7.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      xaxis_title='Fecha', yaxis_title='Precio ($)',
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig7, use_container_width=True)
+    try:
+        monthly_avg = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
+            'sellingprice': 'mean',
+            'odometer': 'mean'
+        }).reset_index()
+        monthly_avg['saledate'] = monthly_avg['saledate'].dt.to_timestamp()
+        
+        if len(monthly_avg) > 0:
+            fig7 = go.Figure()
+            fig7.add_trace(go.Scatter(x=monthly_avg['saledate'], y=monthly_avg['sellingprice'],
+                                      mode='lines+markers', name='Precio',
+                                      line=dict(color='blue', width=2),
+                                      fill='tozeroy', fillcolor='rgba(0,100,255,0.2)'))
+            
+            # Media móvil
+            if len(monthly_avg) >= 3:
+                monthly_avg['rolling_avg'] = monthly_avg['sellingprice'].rolling(window=3).mean()
+                fig7.add_trace(go.Scatter(x=monthly_avg['saledate'], y=monthly_avg['rolling_avg'],
+                                          mode='lines', name='Tendencia (3 meses)',
+                                          line=dict(color='red', width=2, dash='dash')))
+            
+            fig7.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              xaxis_title='Fecha', yaxis_title='Precio ($)',
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig7, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos temporales.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de evolución temporal.")
     
     # Gráfico 8: Precio por Transmisión
     st.markdown("#### 8. Precio por Transmisión")
     st.caption("**¿Por qué?** El tipo de transmisión (automática vs manual) influye en el precio por preferencias del mercado y tecnología.")
     
-    trans_price = filtered_df.groupby('transmission').agg({
-        'sellingprice': ['mean', 'count']
-    }).reset_index()
-    trans_price.columns = ['transmission', 'avg_price', 'count']
-    trans_price = trans_price[trans_price['count'] >= 20]
-    
-    fig8 = px.bar(trans_price, x='transmission', y='avg_price',
-                  labels={'transmission': 'Transmisión', 'avg_price': 'Precio Promedio ($)'},
-                  color='avg_price', color_continuous_scale='Teal')
-    fig8.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      showlegend=False)
-    st.plotly_chart(fig8, use_container_width=True)
+    try:
+        trans_price = filtered_df.groupby('transmission').agg({
+            'sellingprice': ['mean', 'count']
+        }).reset_index()
+        trans_price.columns = ['transmission', 'avg_price', 'count']
+        trans_price = trans_price[trans_price['count'] >= 5]  # Reducir umbral
+        
+        if len(trans_price) > 0:
+            fig8 = px.bar(trans_price, x='transmission', y='avg_price',
+                          labels={'transmission': 'Transmisión', 'avg_price': 'Precio Promedio ($)'},
+                          color='avg_price', color_continuous_scale='Teal')
+            fig8.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              showlegend=False)
+            st.plotly_chart(fig8, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos por tipo de transmisión.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de precio por transmisión.")
     
     # Gráfico 9: Precio Real vs Valor de Referencia
     st.markdown("#### 9. Precio Real vs Valor MMR")
     st.caption("**¿Por qué?** Compara el precio de venta real contra el valor de mercado (MMR). Identifica si se vende arriba o abajo del valor esperado.")
     
-    # Calcular diferencia porcentual
-    filtered_df['price_diff'] = ((filtered_df['sellingprice'] - filtered_df['mmr']) / filtered_df['mmr'] * 100)
-    
-    # Agrupar por mes
-    monthly_comparison = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
-        'sellingprice': 'mean',
-        'mmr': 'mean'
-    }).reset_index()
-    monthly_comparison['saledate'] = monthly_comparison['saledate'].dt.to_timestamp()
-    
-    fig9 = go.Figure()
-    fig9.add_trace(go.Scatter(x=monthly_comparison['saledate'], 
-                              y=monthly_comparison['sellingprice'],
-                              mode='lines', name='Precio Real',
-                              line=dict(color='blue', width=2)))
-    fig9.add_trace(go.Scatter(x=monthly_comparison['saledate'], 
-                              y=monthly_comparison['mmr'],
-                              mode='lines', name='Valor MMR',
-                              line=dict(color='orange', width=2, dash='dot')))
-    
-    fig9.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
-                      xaxis_title='Fecha', yaxis_title='Precio ($)',
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig9, use_container_width=True)
+    try:
+        # Calcular diferencia porcentual
+        filtered_df['price_diff'] = ((filtered_df['sellingprice'] - filtered_df['mmr']) / filtered_df['mmr'] * 100)
+        
+        # Agrupar por mes
+        monthly_comparison = filtered_df_clean.groupby(filtered_df_clean['saledate'].dt.to_period('M')).agg({
+            'sellingprice': 'mean',
+            'mmr': 'mean'
+        }).reset_index()
+        monthly_comparison['saledate'] = monthly_comparison['saledate'].dt.to_timestamp()
+        
+        if len(monthly_comparison) > 0:
+            fig9 = go.Figure()
+            fig9.add_trace(go.Scatter(x=monthly_comparison['saledate'], 
+                                      y=monthly_comparison['sellingprice'],
+                                      mode='lines', name='Precio Real',
+                                      line=dict(color='blue', width=2)))
+            fig9.add_trace(go.Scatter(x=monthly_comparison['saledate'], 
+                                      y=monthly_comparison['mmr'],
+                                      mode='lines', name='Valor MMR',
+                                      line=dict(color='orange', width=2, dash='dot')))
+            
+            fig9.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20),
+                              xaxis_title='Fecha', yaxis_title='Precio ($)',
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig9, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos para comparar precio vs MMR.")
+    except Exception as e:
+        st.info("No se pudo generar el gráfico de comparación de precios.")
 
 # ====== SECCIÓN FINAL: MATRIZ DE CORRELACIÓN ======
 st.markdown("---")
@@ -321,24 +411,27 @@ st.caption("**¿Por qué?** Esta matriz identifica qué variables están más fu
 col1, col2, col3 = st.columns([2, 1, 2])
 
 with col1:
-    # Matriz de correlación
-    numeric_cols = ['year', 'condition', 'odometer', 'mmr', 'sellingprice', 'vehicle_age']
-    corr_data = filtered_df_clean[numeric_cols].corr()
-    
-    fig_corr = go.Figure(data=go.Heatmap(
-        z=corr_data.values,
-        x=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad'],
-        y=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad'],
-        colorscale='RdBu',
-        zmid=0,
-        text=corr_data.values.round(2),
-        texttemplate='%{text}',
-        textfont={"size": 11},
-        colorbar=dict(title="Correlación")
-    ))
-    
-    fig_corr.update_layout(height=350, margin=dict(l=20, r=20, t=30, b=20))
-    st.plotly_chart(fig_corr, use_container_width=True)
+    try:
+        # Matriz de correlación
+        numeric_cols = ['year', 'condition', 'odometer', 'mmr', 'sellingprice', 'vehicle_age']
+        corr_data = filtered_df_clean[numeric_cols].corr()
+        
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_data.values,
+            x=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad'],
+            y=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad'],
+            colorscale='RdBu',
+            zmid=0,
+            text=corr_data.values.round(2),
+            texttemplate='%{text}',
+            textfont={"size": 11},
+            colorbar=dict(title="Correlación")
+        ))
+        
+        fig_corr.update_layout(height=350, margin=dict(l=20, r=20, t=30, b=20))
+        st.plotly_chart(fig_corr, use_container_width=True)
+    except Exception as e:
+        st.info("No se pudo generar la matriz de correlación.")
 
 with col2:
     st.markdown("#### **Hallazgos Clave:**")
@@ -398,77 +491,83 @@ with col1:
     st.caption("**¿Qué es?** PCA reduce la dimensionalidad identificando las direcciones de máxima varianza en los datos.")
     st.caption("**¿Por qué?** Permite identificar qué combinaciones de variables explican mejor la variabilidad del precio.")
     
-    # Preparar datos para PCA
-    numeric_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice', 'vehicle_age']
-    pca_data = filtered_df_clean[numeric_features].dropna()
-    
-    # Normalizar los datos
-    scaler = StandardScaler()
-    data_scaled = scaler.fit_transform(pca_data)
-    
-    # Aplicar PCA
-    pca = PCA()
-    pca_result = pca.fit_transform(data_scaled)
-    
-    # Gráfico 1: Varianza explicada
-    st.markdown("**1. Varianza Explicada por Componente**")
-    var_exp = pd.DataFrame({
-        'Componente': [f'PC{i+1}' for i in range(len(pca.explained_variance_ratio_))],
-        'Varianza (%)': pca.explained_variance_ratio_ * 100
-    })
-    
-    fig_pca1 = px.bar(var_exp, x='Componente', y='Varianza (%)',
-                      labels={'Varianza (%)': 'Varianza Explicada (%)'},
-                      color='Varianza (%)', color_continuous_scale='Blues')
-    fig_pca1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
-    st.plotly_chart(fig_pca1, use_container_width=True)
-    
-    st.caption(f"Los primeros 2 componentes explican **{(pca.explained_variance_ratio_[:2].sum()*100):.1f}%** de la varianza total.")
-    
-    # Gráfico 2: Loadings (Contribuciones)
-    st.markdown("**2. Contribución de Variables**")
-    st.caption("Muestra qué variables influyen más en cada componente principal.")
-    
-    loadings_df = pd.DataFrame(
-        pca.components_[:3].T,
-        columns=['PC1', 'PC2', 'PC3'],
-        index=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad']
-    )
-    
-    fig_pca2 = go.Figure(data=go.Heatmap(
-        z=loadings_df.values,
-        x=loadings_df.columns,
-        y=loadings_df.index,
-        colorscale='RdBu',
-        zmid=0,
-        text=loadings_df.values.round(2),
-        texttemplate='%{text}',
-        textfont={"size": 10},
-        colorbar=dict(title="Loading")
-    ))
-    fig_pca2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_pca2, use_container_width=True)
-    
-    st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte influencia en el componente.")
-    
-    # Gráfico 3: Proyección 2D
-    st.markdown("**3. Proyección en 2D (PC1 vs PC2)**")
-    st.caption("Visualiza cómo se distribuyen los vehículos según los componentes principales, coloreado por precio.")
-    
-    sample_size = min(500, len(pca_result))
-    indices = np.random.choice(len(pca_result), sample_size, replace=False)
-    
-    pca_plot_df = pd.DataFrame({
-        'PC1': pca_result[indices, 0],
-        'PC2': pca_result[indices, 1],
-        'Precio': pca_data.iloc[indices]['sellingprice'].values
-    })
-    
-    fig_pca3 = px.scatter(pca_plot_df, x='PC1', y='PC2', color='Precio',
-                         color_continuous_scale='Viridis',
-                         labels={'Precio': 'Precio ($)'})
-    fig_pca3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_pca3, use_container_width=True)
+    try:
+        # Preparar datos para PCA
+        numeric_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice', 'vehicle_age']
+        pca_data = filtered_df_clean[numeric_features].dropna()
+        
+        if len(pca_data) < 10:
+            st.warning("No hay suficientes datos para realizar PCA (mínimo 10 registros).")
+        else:
+            # Normalizar los datos
+            scaler = StandardScaler()
+            data_scaled = scaler.fit_transform(pca_data)
+            
+            # Aplicar PCA
+            pca = PCA()
+            pca_result = pca.fit_transform(data_scaled)
+            
+            # Gráfico 1: Varianza explicada
+            st.markdown("**1. Varianza Explicada por Componente**")
+            var_exp = pd.DataFrame({
+                'Componente': [f'PC{i+1}' for i in range(len(pca.explained_variance_ratio_))],
+                'Varianza (%)': pca.explained_variance_ratio_ * 100
+            })
+            
+            fig_pca1 = px.bar(var_exp, x='Componente', y='Varianza (%)',
+                              labels={'Varianza (%)': 'Varianza Explicada (%)'},
+                              color='Varianza (%)', color_continuous_scale='Blues')
+            fig_pca1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
+            st.plotly_chart(fig_pca1, use_container_width=True)
+            
+            st.caption(f"Los primeros 2 componentes explican **{(pca.explained_variance_ratio_[:2].sum()*100):.1f}%** de la varianza total.")
+            
+            # Gráfico 2: Loadings (Contribuciones)
+            st.markdown("**2. Contribución de Variables**")
+            st.caption("Muestra qué variables influyen más en cada componente principal.")
+            
+            loadings_df = pd.DataFrame(
+                pca.components_[:3].T,
+                columns=['PC1', 'PC2', 'PC3'],
+                index=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad']
+            )
+            
+            fig_pca2 = go.Figure(data=go.Heatmap(
+                z=loadings_df.values,
+                x=loadings_df.columns,
+                y=loadings_df.index,
+                colorscale='RdBu',
+                zmid=0,
+                text=loadings_df.values.round(2),
+                texttemplate='%{text}',
+                textfont={"size": 10},
+                colorbar=dict(title="Loading")
+            ))
+            fig_pca2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_pca2, use_container_width=True)
+            
+            st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte influencia en el componente.")
+            
+            # Gráfico 3: Proyección 2D
+            st.markdown("**3. Proyección en 2D (PC1 vs PC2)**")
+            st.caption("Visualiza cómo se distribuyen los vehículos según los componentes principales, coloreado por precio.")
+            
+            sample_size = min(500, len(pca_result))
+            indices = np.random.choice(len(pca_result), sample_size, replace=False)
+            
+            pca_plot_df = pd.DataFrame({
+                'PC1': pca_result[indices, 0],
+                'PC2': pca_result[indices, 1],
+                'Precio': pca_data.iloc[indices]['sellingprice'].values
+            })
+            
+            fig_pca3 = px.scatter(pca_plot_df, x='PC1', y='PC2', color='Precio',
+                                 color_continuous_scale='Viridis',
+                                 labels={'Precio': 'Precio ($)'})
+            fig_pca3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_pca3, use_container_width=True)
+    except Exception as e:
+        st.error("No se pudo realizar el análisis PCA. Verifica que los datos filtrados sean suficientes.")
 
 # ========== COLUMNA 2: MDS ==========
 with col2:
@@ -476,59 +575,66 @@ with col2:
     st.caption("**¿Qué es?** MDS proyecta datos en menor dimensión preservando las distancias entre observaciones.")
     st.caption("**¿Por qué?** Revela patrones de similitud entre vehículos basados en precio y características.")
     
-    # Preparar datos para MDS
-    mds_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice']
-    sample_size_mds = min(500, len(filtered_df_clean))
-    mds_data = filtered_df_clean[mds_features].sample(n=sample_size_mds, random_state=42)
-    
-    # Normalizar
-    scaler_mds = StandardScaler()
-    data_scaled_mds = scaler_mds.fit_transform(mds_data)
-    
-    # Aplicar MDS
-    with st.spinner('Calculando MDS...'):
-        mds = MDS(n_components=2, random_state=42, normalized_stress='auto')
-        mds_result = mds.fit_transform(data_scaled_mds)
-    
-    # Gráfico 1: MDS coloreado por precio
-    st.markdown("**1. Proyección MDS por Precio**")
-    st.caption("Vehículos similares en precio y características aparecen cercanos.")
-    
-    mds_plot_df = pd.DataFrame({
-        'MDS1': mds_result[:, 0],
-        'MDS2': mds_result[:, 1],
-        'Precio': mds_data['sellingprice'].values,
-        'Kilometraje': mds_data['odometer'].values,
-        'Año': mds_data['year'].values
-    })
-    
-    fig_mds1 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Precio',
-                         color_continuous_scale='Plasma',
-                         labels={'Precio': 'Precio ($)'})
-    fig_mds1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_mds1, use_container_width=True)
-    
-    # Gráfico 2: MDS coloreado por kilometraje
-    st.markdown("**2. Proyección MDS por Kilometraje**")
-    st.caption("Identifica si el kilometraje genera clusters distintos de vehículos.")
-    
-    fig_mds2 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Kilometraje',
-                         color_continuous_scale='YlOrRd',
-                         labels={'Kilometraje': 'Kilometraje'})
-    fig_mds2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_mds2, use_container_width=True)
-    
-    # Gráfico 3: MDS coloreado por año
-    st.markdown("**3. Proyección MDS por Año**")
-    st.caption("Muestra cómo vehículos de diferentes años se agrupan en el espacio MDS.")
-    
-    fig_mds3 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Año',
-                         color_continuous_scale='Teal',
-                         labels={'Año': 'Año'})
-    fig_mds3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_mds3, use_container_width=True)
-    
-    st.caption(f"**Stress MDS:** {mds.stress_:.3f} (valores <0.1 indican excelente ajuste)")
+    try:
+        # Preparar datos para MDS
+        mds_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice']
+        sample_size_mds = min(500, len(filtered_df_clean))
+        
+        if sample_size_mds < 10:
+            st.warning("No hay suficientes datos para realizar MDS (mínimo 10 registros).")
+        else:
+            mds_data = filtered_df_clean[mds_features].sample(n=sample_size_mds, random_state=42)
+            
+            # Normalizar
+            scaler_mds = StandardScaler()
+            data_scaled_mds = scaler_mds.fit_transform(mds_data)
+            
+            # Aplicar MDS
+            with st.spinner('Calculando MDS...'):
+                mds = MDS(n_components=2, random_state=42, normalized_stress='auto')
+                mds_result = mds.fit_transform(data_scaled_mds)
+            
+            # Gráfico 1: MDS coloreado por precio
+            st.markdown("**1. Proyección MDS por Precio**")
+            st.caption("Vehículos similares en precio y características aparecen cercanos.")
+            
+            mds_plot_df = pd.DataFrame({
+                'MDS1': mds_result[:, 0],
+                'MDS2': mds_result[:, 1],
+                'Precio': mds_data['sellingprice'].values,
+                'Kilometraje': mds_data['odometer'].values,
+                'Año': mds_data['year'].values
+            })
+            
+            fig_mds1 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Precio',
+                                 color_continuous_scale='Plasma',
+                                 labels={'Precio': 'Precio ($)'})
+            fig_mds1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_mds1, use_container_width=True)
+            
+            # Gráfico 2: MDS coloreado por kilometraje
+            st.markdown("**2. Proyección MDS por Kilometraje**")
+            st.caption("Identifica si el kilometraje genera clusters distintos de vehículos.")
+            
+            fig_mds2 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Kilometraje',
+                                 color_continuous_scale='YlOrRd',
+                                 labels={'Kilometraje': 'Kilometraje'})
+            fig_mds2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_mds2, use_container_width=True)
+            
+            # Gráfico 3: MDS coloreado por año
+            st.markdown("**3. Proyección MDS por Año**")
+            st.caption("Muestra cómo vehículos de diferentes años se agrupan en el espacio MDS.")
+            
+            fig_mds3 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Año',
+                                 color_continuous_scale='Teal',
+                                 labels={'Año': 'Año'})
+            fig_mds3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_mds3, use_container_width=True)
+            
+            st.caption(f"**Stress MDS:** {mds.stress_:.3f} (valores <0.1 indican excelente ajuste)")
+    except Exception as e:
+        st.error("No se pudo realizar el análisis MDS. Verifica que los datos filtrados sean suficientes.")
 
 # ========== COLUMNA 3: CORRELACIÓN PARCIAL DE PEARSON ==========
 with col3:
@@ -536,117 +642,126 @@ with col3:
     st.caption("**¿Qué es?** Mide la correlación entre dos variables controlando el efecto de otras variables.")
     st.caption("**¿Por qué?** Identifica relaciones directas con el precio, eliminando efectos confusores.")
     
-    st.markdown("**1. Correlación Parcial con Precio**")
-    st.caption("Correlación de cada variable con el precio, controlando por las demás variables.")
-    
-    # Calcular correlaciones parciales
-    def partial_corr(df, x, y, control_vars):
-        """Calcula la correlación parcial entre x e y controlando por control_vars"""
-        # Crear matriz de variables
-        vars_list = [x, y] + control_vars
-        data = df[vars_list].dropna()
+    try:
+        st.markdown("**1. Correlación Parcial con Precio**")
+        st.caption("Correlación de cada variable con el precio, controlando por las demás variables.")
         
-        # Calcular matriz de correlación
-        corr_matrix = data.corr().values
+        # Calcular correlaciones parciales
+        def partial_corr(df, x, y, control_vars):
+            """Calcula la correlación parcial entre x e y controlando por control_vars"""
+            try:
+                # Crear matriz de variables
+                vars_list = [x, y] + control_vars
+                data = df[vars_list].dropna()
+                
+                if len(data) < len(vars_list) + 5:  # Necesitamos suficientes observaciones
+                    return None
+                
+                # Calcular matriz de correlación
+                corr_matrix = data.corr().values
+                
+                # Calcular correlación parcial usando la inversa de la matriz
+                precision_matrix = np.linalg.inv(corr_matrix)
+                
+                # La correlación parcial se calcula de la matriz de precisión
+                partial_corr_value = -precision_matrix[0, 1] / np.sqrt(precision_matrix[0, 0] * precision_matrix[1, 1])
+                
+                return partial_corr_value
+            except:
+                return None
         
-        # Calcular correlación parcial usando la inversa de la matriz
-        precision_matrix = np.linalg.inv(corr_matrix)
+        # Variables a analizar
+        vars_to_analyze = ['year', 'condition', 'odometer', 'mmr', 'vehicle_age']
         
-        # La correlación parcial se calcula de la matriz de precisión
-        partial_corr_value = -precision_matrix[0, 1] / np.sqrt(precision_matrix[0, 0] * precision_matrix[1, 1])
-        
-        return partial_corr_value
-    
-    # Variables a analizar
-    vars_to_analyze = ['year', 'condition', 'odometer', 'mmr', 'vehicle_age']
-    
-    partial_corr_results = []
-    for var in vars_to_analyze:
-        control_vars = [v for v in vars_to_analyze if v != var]
-        try:
+        partial_corr_results = []
+        for var in vars_to_analyze:
+            control_vars = [v for v in vars_to_analyze if v != var]
             p_corr = partial_corr(filtered_df_clean, var, 'sellingprice', control_vars)
-            partial_corr_results.append({
-                'Variable': var,
-                'Correlación Parcial': p_corr
+            if p_corr is not None:
+                partial_corr_results.append({
+                    'Variable': var,
+                    'Correlación Parcial': p_corr
+                })
+        
+        if len(partial_corr_results) == 0:
+            st.warning("No se pudieron calcular correlaciones parciales. Datos insuficientes o con poca variabilidad.")
+        else:
+            partial_corr_df = pd.DataFrame(partial_corr_results)
+            partial_corr_df['Variable'] = partial_corr_df['Variable'].map({
+                'year': 'Año',
+                'condition': 'Condición',
+                'odometer': 'Kilometraje',
+                'mmr': 'Valor MMR',
+                'vehicle_age': 'Edad'
             })
-        except:
-            pass
-    
-    partial_corr_df = pd.DataFrame(partial_corr_results)
-    partial_corr_df['Variable'] = partial_corr_df['Variable'].map({
-        'year': 'Año',
-        'condition': 'Condición',
-        'odometer': 'Kilometraje',
-        'mmr': 'Valor MMR',
-        'vehicle_age': 'Edad'
-    })
-    partial_corr_df = partial_corr_df.sort_values('Correlación Parcial', key=abs, ascending=False)
-    
-    fig_partial1 = px.bar(partial_corr_df, y='Variable', x='Correlación Parcial',
-                         orientation='h',
-                         color='Correlación Parcial',
-                         color_continuous_scale='RdBu',
-                         range_color=[-1, 1],
-                         labels={'Correlación Parcial': 'Correlación Parcial'})
-    fig_partial1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_partial1, use_container_width=True)
-    
-    st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte relación directa con el precio.")
-    
-    # Gráfico 2: Comparación correlación simple vs parcial
-    st.markdown("**2. Comparación: Simple vs Parcial**")
-    st.caption("Diferencia entre correlación simple y parcial revela efectos indirectos.")
-    
-    simple_corr = []
-    for var in vars_to_analyze:
-        corr_val = filtered_df_clean[[var, 'sellingprice']].corr().iloc[0, 1]
-        simple_corr.append(corr_val)
-    
-    comparison_df = pd.DataFrame({
-        'Variable': partial_corr_df['Variable'].values,
-        'Simple': simple_corr,
-        'Parcial': partial_corr_df['Correlación Parcial'].values
-    })
-    
-    fig_partial2 = go.Figure()
-    fig_partial2.add_trace(go.Bar(
-        y=comparison_df['Variable'],
-        x=comparison_df['Simple'],
-        name='Correlación Simple',
-        orientation='h',
-        marker=dict(color='lightblue')
-    ))
-    fig_partial2.add_trace(go.Bar(
-        y=comparison_df['Variable'],
-        x=comparison_df['Parcial'],
-        name='Correlación Parcial',
-        orientation='h',
-        marker=dict(color='darkblue')
-    ))
-    fig_partial2.update_layout(
-        barmode='group',
-        height=220,
-        margin=dict(l=20, r=20, t=20, b=20),
-        xaxis_title='Correlación',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_partial2, use_container_width=True)
-    
-    # Tabla resumen
-    st.markdown("**3. Tabla de Resultados**")
-    st.caption("Resumen de correlaciones simples y parciales con el precio.")
-    
-    comparison_styled = comparison_df.copy()
-    comparison_styled['Simple'] = comparison_styled['Simple'].apply(lambda x: f"{x:.3f}")
-    comparison_styled['Parcial'] = comparison_styled['Parcial'].apply(lambda x: f"{x:.3f}")
-    comparison_styled['Diferencia'] = (comparison_df['Simple'] - comparison_df['Parcial']).apply(lambda x: f"{x:.3f}")
-    
-    st.dataframe(comparison_styled, use_container_width=True, hide_index=True)
-    
-    st.caption("**Nota:** Gran diferencia entre simple y parcial indica efectos indirectos (mediados por otras variables).")
-
-# Footer con conclusiones
-st.markdown("---")
+            partial_corr_df = partial_corr_df.sort_values('Correlación Parcial', key=abs, ascending=False)
+            
+            fig_partial1 = px.bar(partial_corr_df, y='Variable', x='Correlación Parcial',
+                                 orientation='h',
+                                 color='Correlación Parcial',
+                                 color_continuous_scale='RdBu',
+                                 range_color=[-1, 1],
+                                 labels={'Correlación Parcial': 'Correlación Parcial'})
+            fig_partial1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_partial1, use_container_width=True)
+            
+            st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte relación directa con el precio.")
+            
+            # Gráfico 2: Comparación correlación simple vs parcial
+            st.markdown("**2. Comparación: Simple vs Parcial**")
+            st.caption("Diferencia entre correlación simple y parcial revela efectos indirectos.")
+            
+            simple_corr = []
+            for var in vars_to_analyze:
+                if var in filtered_df_clean.columns:
+                    corr_val = filtered_df_clean[[var, 'sellingprice']].corr().iloc[0, 1]
+                    simple_corr.append(corr_val)
+            
+            if len(simple_corr) == len(partial_corr_df):
+                comparison_df = pd.DataFrame({
+                    'Variable': partial_corr_df['Variable'].values,
+                    'Simple': simple_corr,
+                    'Parcial': partial_corr_df['Correlación Parcial'].values
+                })
+                
+                fig_partial2 = go.Figure()
+                fig_partial2.add_trace(go.Bar(
+                    y=comparison_df['Variable'],
+                    x=comparison_df['Simple'],
+                    name='Correlación Simple',
+                    orientation='h',
+                    marker=dict(color='lightblue')
+                ))
+                fig_partial2.add_trace(go.Bar(
+                    y=comparison_df['Variable'],
+                    x=comparison_df['Parcial'],
+                    name='Correlación Parcial',
+                    orientation='h',
+                    marker=dict(color='darkblue')
+                ))
+                fig_partial2.update_layout(
+                    barmode='group',
+                    height=220,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    xaxis_title='Correlación',
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_partial2, use_container_width=True)
+                
+                # Tabla resumen
+                st.markdown("**3. Tabla de Resultados**")
+                st.caption("Resumen de correlaciones simples y parciales con el precio.")
+                
+                comparison_styled = comparison_df.copy()
+                comparison_styled['Simple'] = comparison_styled['Simple'].apply(lambda x: f"{x:.3f}")
+                comparison_styled['Parcial'] = comparison_styled['Parcial'].apply(lambda x: f"{x:.3f}")
+                comparison_styled['Diferencia'] = (comparison_df['Simple'] - comparison_df['Parcial']).apply(lambda x: f"{x:.3f}")
+                
+                st.dataframe(comparison_styled, use_container_width=True, hide_index=True)
+                
+                st.caption("**Nota:** Gran diferencia entre simple y parcial indica efectos indirectos (mediados por otras variables).")
+    except Exception as e:
+        st.error("No se pudo realizar el análisis de correlación parcial. Verifica que los datos filtrados sean suficientes.")
 st.markdown("""
 ### **Conclusiones sobre Factores que Influyen en el Precio:**
 
