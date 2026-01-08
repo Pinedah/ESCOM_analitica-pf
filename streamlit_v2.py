@@ -4,7 +4,10 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.manifold import MDS
 from datetime import datetime
+from scipy import stats
 
 # Configuración de la página
 st.set_page_config(page_title="Factores que Influyen en Precios de Autos", layout="wide")
@@ -381,6 +384,266 @@ with col3:
                            labels={'Correlación': 'Correlación Absoluta'})
     fig_importance.update_layout(height=350, margin=dict(l=20, r=20, t=30, b=20))
     st.plotly_chart(fig_importance, use_container_width=True)
+
+# ====== SECCIÓN DE ANÁLISIS AVANZADOS ======
+st.markdown("---")
+st.markdown("### **Análisis Avanzados: Técnicas Multivariadas**")
+st.caption("**Objetivo:** Aplicar técnicas estadísticas avanzadas para entender mejor las relaciones entre variables y el precio.")
+
+col1, col2, col3 = st.columns(3)
+
+# ========== COLUMNA 1: PCA ==========
+with col1:
+    st.markdown("#### **Análisis de Componentes Principales (PCA)**")
+    st.caption("**¿Qué es?** PCA reduce la dimensionalidad identificando las direcciones de máxima varianza en los datos.")
+    st.caption("**¿Por qué?** Permite identificar qué combinaciones de variables explican mejor la variabilidad del precio.")
+    
+    # Preparar datos para PCA
+    numeric_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice', 'vehicle_age']
+    pca_data = filtered_df_clean[numeric_features].dropna()
+    
+    # Normalizar los datos
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(pca_data)
+    
+    # Aplicar PCA
+    pca = PCA()
+    pca_result = pca.fit_transform(data_scaled)
+    
+    # Gráfico 1: Varianza explicada
+    st.markdown("**1. Varianza Explicada por Componente**")
+    var_exp = pd.DataFrame({
+        'Componente': [f'PC{i+1}' for i in range(len(pca.explained_variance_ratio_))],
+        'Varianza (%)': pca.explained_variance_ratio_ * 100
+    })
+    
+    fig_pca1 = px.bar(var_exp, x='Componente', y='Varianza (%)',
+                      labels={'Varianza (%)': 'Varianza Explicada (%)'},
+                      color='Varianza (%)', color_continuous_scale='Blues')
+    fig_pca1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
+    st.plotly_chart(fig_pca1, use_container_width=True)
+    
+    st.caption(f"Los primeros 2 componentes explican **{(pca.explained_variance_ratio_[:2].sum()*100):.1f}%** de la varianza total.")
+    
+    # Gráfico 2: Loadings (Contribuciones)
+    st.markdown("**2. Contribución de Variables**")
+    st.caption("Muestra qué variables influyen más en cada componente principal.")
+    
+    loadings_df = pd.DataFrame(
+        pca.components_[:3].T,
+        columns=['PC1', 'PC2', 'PC3'],
+        index=['Año', 'Condición', 'Kilometraje', 'MMR', 'Precio', 'Edad']
+    )
+    
+    fig_pca2 = go.Figure(data=go.Heatmap(
+        z=loadings_df.values,
+        x=loadings_df.columns,
+        y=loadings_df.index,
+        colorscale='RdBu',
+        zmid=0,
+        text=loadings_df.values.round(2),
+        texttemplate='%{text}',
+        textfont={"size": 10},
+        colorbar=dict(title="Loading")
+    ))
+    fig_pca2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_pca2, use_container_width=True)
+    
+    st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte influencia en el componente.")
+    
+    # Gráfico 3: Proyección 2D
+    st.markdown("**3. Proyección en 2D (PC1 vs PC2)**")
+    st.caption("Visualiza cómo se distribuyen los vehículos según los componentes principales, coloreado por precio.")
+    
+    sample_size = min(500, len(pca_result))
+    indices = np.random.choice(len(pca_result), sample_size, replace=False)
+    
+    pca_plot_df = pd.DataFrame({
+        'PC1': pca_result[indices, 0],
+        'PC2': pca_result[indices, 1],
+        'Precio': pca_data.iloc[indices]['sellingprice'].values
+    })
+    
+    fig_pca3 = px.scatter(pca_plot_df, x='PC1', y='PC2', color='Precio',
+                         color_continuous_scale='Viridis',
+                         labels={'Precio': 'Precio ($)'})
+    fig_pca3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_pca3, use_container_width=True)
+
+# ========== COLUMNA 2: MDS ==========
+with col2:
+    st.markdown("#### **Escalamiento Multidimensional (MDS)**")
+    st.caption("**¿Qué es?** MDS proyecta datos en menor dimensión preservando las distancias entre observaciones.")
+    st.caption("**¿Por qué?** Revela patrones de similitud entre vehículos basados en precio y características.")
+    
+    # Preparar datos para MDS
+    mds_features = ['year', 'condition', 'odometer', 'mmr', 'sellingprice']
+    sample_size_mds = min(500, len(filtered_df_clean))
+    mds_data = filtered_df_clean[mds_features].sample(n=sample_size_mds, random_state=42)
+    
+    # Normalizar
+    scaler_mds = StandardScaler()
+    data_scaled_mds = scaler_mds.fit_transform(mds_data)
+    
+    # Aplicar MDS
+    with st.spinner('Calculando MDS...'):
+        mds = MDS(n_components=2, random_state=42, normalized_stress='auto')
+        mds_result = mds.fit_transform(data_scaled_mds)
+    
+    # Gráfico 1: MDS coloreado por precio
+    st.markdown("**1. Proyección MDS por Precio**")
+    st.caption("Vehículos similares en precio y características aparecen cercanos.")
+    
+    mds_plot_df = pd.DataFrame({
+        'MDS1': mds_result[:, 0],
+        'MDS2': mds_result[:, 1],
+        'Precio': mds_data['sellingprice'].values,
+        'Kilometraje': mds_data['odometer'].values,
+        'Año': mds_data['year'].values
+    })
+    
+    fig_mds1 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Precio',
+                         color_continuous_scale='Plasma',
+                         labels={'Precio': 'Precio ($)'})
+    fig_mds1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_mds1, use_container_width=True)
+    
+    # Gráfico 2: MDS coloreado por kilometraje
+    st.markdown("**2. Proyección MDS por Kilometraje**")
+    st.caption("Identifica si el kilometraje genera clusters distintos de vehículos.")
+    
+    fig_mds2 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Kilometraje',
+                         color_continuous_scale='YlOrRd',
+                         labels={'Kilometraje': 'Kilometraje'})
+    fig_mds2.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_mds2, use_container_width=True)
+    
+    # Gráfico 3: MDS coloreado por año
+    st.markdown("**3. Proyección MDS por Año**")
+    st.caption("Muestra cómo vehículos de diferentes años se agrupan en el espacio MDS.")
+    
+    fig_mds3 = px.scatter(mds_plot_df, x='MDS1', y='MDS2', color='Año',
+                         color_continuous_scale='Teal',
+                         labels={'Año': 'Año'})
+    fig_mds3.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_mds3, use_container_width=True)
+    
+    st.caption(f"**Stress MDS:** {mds.stress_:.3f} (valores <0.1 indican excelente ajuste)")
+
+# ========== COLUMNA 3: CORRELACIÓN PARCIAL DE PEARSON ==========
+with col3:
+    st.markdown("#### **Correlación Parcial de Pearson**")
+    st.caption("**¿Qué es?** Mide la correlación entre dos variables controlando el efecto de otras variables.")
+    st.caption("**¿Por qué?** Identifica relaciones directas con el precio, eliminando efectos confusores.")
+    
+    st.markdown("**1. Correlación Parcial con Precio**")
+    st.caption("Correlación de cada variable con el precio, controlando por las demás variables.")
+    
+    # Calcular correlaciones parciales
+    def partial_corr(df, x, y, control_vars):
+        """Calcula la correlación parcial entre x e y controlando por control_vars"""
+        # Crear matriz de variables
+        vars_list = [x, y] + control_vars
+        data = df[vars_list].dropna()
+        
+        # Calcular matriz de correlación
+        corr_matrix = data.corr().values
+        
+        # Calcular correlación parcial usando la inversa de la matriz
+        precision_matrix = np.linalg.inv(corr_matrix)
+        
+        # La correlación parcial se calcula de la matriz de precisión
+        partial_corr_value = -precision_matrix[0, 1] / np.sqrt(precision_matrix[0, 0] * precision_matrix[1, 1])
+        
+        return partial_corr_value
+    
+    # Variables a analizar
+    vars_to_analyze = ['year', 'condition', 'odometer', 'mmr', 'vehicle_age']
+    
+    partial_corr_results = []
+    for var in vars_to_analyze:
+        control_vars = [v for v in vars_to_analyze if v != var]
+        try:
+            p_corr = partial_corr(filtered_df_clean, var, 'sellingprice', control_vars)
+            partial_corr_results.append({
+                'Variable': var,
+                'Correlación Parcial': p_corr
+            })
+        except:
+            pass
+    
+    partial_corr_df = pd.DataFrame(partial_corr_results)
+    partial_corr_df['Variable'] = partial_corr_df['Variable'].map({
+        'year': 'Año',
+        'condition': 'Condición',
+        'odometer': 'Kilometraje',
+        'mmr': 'Valor MMR',
+        'vehicle_age': 'Edad'
+    })
+    partial_corr_df = partial_corr_df.sort_values('Correlación Parcial', key=abs, ascending=False)
+    
+    fig_partial1 = px.bar(partial_corr_df, y='Variable', x='Correlación Parcial',
+                         orientation='h',
+                         color='Correlación Parcial',
+                         color_continuous_scale='RdBu',
+                         range_color=[-1, 1],
+                         labels={'Correlación Parcial': 'Correlación Parcial'})
+    fig_partial1.update_layout(height=220, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_partial1, use_container_width=True)
+    
+    st.caption("**Interpretación:** Valores cercanos a ±1 indican fuerte relación directa con el precio.")
+    
+    # Gráfico 2: Comparación correlación simple vs parcial
+    st.markdown("**2. Comparación: Simple vs Parcial**")
+    st.caption("Diferencia entre correlación simple y parcial revela efectos indirectos.")
+    
+    simple_corr = []
+    for var in vars_to_analyze:
+        corr_val = filtered_df_clean[[var, 'sellingprice']].corr().iloc[0, 1]
+        simple_corr.append(corr_val)
+    
+    comparison_df = pd.DataFrame({
+        'Variable': partial_corr_df['Variable'].values,
+        'Simple': simple_corr,
+        'Parcial': partial_corr_df['Correlación Parcial'].values
+    })
+    
+    fig_partial2 = go.Figure()
+    fig_partial2.add_trace(go.Bar(
+        y=comparison_df['Variable'],
+        x=comparison_df['Simple'],
+        name='Correlación Simple',
+        orientation='h',
+        marker=dict(color='lightblue')
+    ))
+    fig_partial2.add_trace(go.Bar(
+        y=comparison_df['Variable'],
+        x=comparison_df['Parcial'],
+        name='Correlación Parcial',
+        orientation='h',
+        marker=dict(color='darkblue')
+    ))
+    fig_partial2.update_layout(
+        barmode='group',
+        height=220,
+        margin=dict(l=20, r=20, t=20, b=20),
+        xaxis_title='Correlación',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_partial2, use_container_width=True)
+    
+    # Tabla resumen
+    st.markdown("**3. Tabla de Resultados**")
+    st.caption("Resumen de correlaciones simples y parciales con el precio.")
+    
+    comparison_styled = comparison_df.copy()
+    comparison_styled['Simple'] = comparison_styled['Simple'].apply(lambda x: f"{x:.3f}")
+    comparison_styled['Parcial'] = comparison_styled['Parcial'].apply(lambda x: f"{x:.3f}")
+    comparison_styled['Diferencia'] = (comparison_df['Simple'] - comparison_df['Parcial']).apply(lambda x: f"{x:.3f}")
+    
+    st.dataframe(comparison_styled, use_container_width=True, hide_index=True)
+    
+    st.caption("**Nota:** Gran diferencia entre simple y parcial indica efectos indirectos (mediados por otras variables).")
 
 # Footer con conclusiones
 st.markdown("---")
